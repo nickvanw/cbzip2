@@ -12,7 +12,7 @@ import (
 	"unsafe"
 )
 
-type bzipReader struct {
+type Reader struct {
 	r      io.Reader
 	bz     *C.bz_stream
 	in     []byte
@@ -20,12 +20,10 @@ type bzipReader struct {
 	err    error
 }
 
-// NewBzipWriter returns an io.WriteCloser. Writes to this writer are
-// compressed and sent to the underlying writer.
-// It is the callers responsibility to call Close on the WriteCloser.
-// Writes may not be flushed until Close.
-func NewReader(r io.Reader) (io.ReadCloser, error) {
-	rdr := &bzipReader{r: r, in: make([]byte, bufferLen)}
+// NewReader returns an io.ReadCloser. Reads from this are read from the
+// underlying io.Reader and decompressed via bzip2
+func NewReader(r io.Reader) (*Reader, error) {
+	rdr := &Reader{r: r, in: make([]byte, bufferLen)}
 
 	// We dont want to use a custom memory allocator, so we set
 	// bzalloc, bzfree and opaque to NULL, to use malloc / free
@@ -38,7 +36,8 @@ func NewReader(r io.Reader) (io.ReadCloser, error) {
 	return rdr, nil
 }
 
-func (r *bzipReader) Read(p []byte) (int, error) {
+// Read pulls data up from the underlying io.Reader and decompresses the data
+func (r *Reader) Read(p []byte) (int, error) {
 	if len(p) == 0 {
 		return 0, nil
 	}
@@ -104,7 +103,8 @@ func (r *bzipReader) Read(p []byte) (int, error) {
 	}
 }
 
-func (r *bzipReader) Close() error {
+// Close closes the reader, but not the underlying io.Reader
+func (r *Reader) Close() error {
 	if r.err != nil {
 		return r.err
 	}

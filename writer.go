@@ -12,7 +12,7 @@ import (
 	"unsafe"
 )
 
-type bzipWriter struct {
+type Writer struct {
 	w   io.Writer
 	bz  *C.bz_stream
 	out []byte
@@ -21,10 +21,10 @@ type bzipWriter struct {
 
 // NewWriter returns an io.WriteCloser. Writes to this writer are
 // compressed and sent to the underlying writer.
-// It is the callers responsibility to call Close on the WriteCloser.
+// It is the caller's responsibility to call Close on the WriteCloser.
 // Writes may not be flushed until Close.
-func NewWriter(w io.Writer) (io.WriteCloser, error) {
-	wrtr := &bzipWriter{w: w, out: make([]byte, bufferLen)}
+func NewWriter(w io.Writer) (*Writer, error) {
+	wrtr := &Writer{w: w, out: make([]byte, bufferLen)}
 
 	// We dont want to use a custom memory allocator, so we set
 	// bzalloc, bzfree and opaque to NULL, to use malloc / free
@@ -39,7 +39,7 @@ func NewWriter(w io.Writer) (io.WriteCloser, error) {
 
 // Write writes a compressed p to an underlying io.Writer. The bytes are not
 // necessarily flushed until the writer is closed or Flush is called.
-func (b *bzipWriter) Write(d []byte) (int, error) {
+func (b *Writer) Write(d []byte) (int, error) {
 	if b.err != nil {
 		return 0, b.err
 	}
@@ -47,7 +47,7 @@ func (b *bzipWriter) Write(d []byte) (int, error) {
 }
 
 // Flush writes any pending data to the underlying writer.
-func (b *bzipWriter) Flush() error {
+func (b *Writer) Flush() error {
 	if b.err != nil {
 		return b.err
 	}
@@ -57,7 +57,7 @@ func (b *bzipWriter) Flush() error {
 
 // Close closes the writer, flushing any unwritten data to the underlying io.Writer
 // Close does not close the underlying io.Writer.
-func (b *bzipWriter) Close() error {
+func (b *Writer) Close() error {
 	if b.err != nil {
 		return b.err
 	}
@@ -69,7 +69,7 @@ func (b *bzipWriter) Close() error {
 	return nil
 }
 
-func (b *bzipWriter) write(d []byte, flush int) (int, error) {
+func (b *Writer) write(d []byte, flush int) (int, error) {
 	if len(d) == 0 {
 		b.bz.avail_in = 0
 		b.bz.next_in = (*C.char)(unsafe.Pointer(nil))

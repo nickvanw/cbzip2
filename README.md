@@ -9,6 +9,7 @@ via bzlib.h, documented here: a href="http://www.bzip.org/1.0.3/html/low-level.h
 
 
 
+
 ## Constants
 ``` go
 const (
@@ -37,43 +38,109 @@ const (
 copied from bzlib.h
 
 
-
-## func NewBzipWriter
+## Variables
 ``` go
-func NewBzipWriter(w io.Writer) (io.WriteCloser, error)
+var (
+    ErrBadParam       = errors.New("bad param (should be impossible)")
+    ErrBadData        = errors.New("integrity problem detected in input data")
+    ErrBadMagic       = errors.New("compressed stream does not being with magic bytes")
+    ErrMem            = errors.New("insufficient memory available ಠ_ಠ")
+    ErrInit           = errors.New("unable to initialize bzlib.h")
+    ErrBadCompression = errors.New("unable to compress data")
+)
 ```
-NewBzipWriter returns an io.WriteCloser. Writes to this writer are
+
+
+## type Reader
+``` go
+type Reader struct {
+    // contains filtered or unexported fields
+}
+```
+
+
+
+
+
+
+
+
+### func NewReader
+``` go
+func NewReader(r io.Reader) (*Reader, error)
+```
+NewReader returns an io.ReadCloser. Reads from this are read from the
+underlying io.Reader and decompressed via bzip2
+
+
+
+
+### func (\*Reader) Close
+``` go
+func (r *Reader) Close() error
+```
+Close closes the reader, but not the underlying io.Reader
+
+
+
+### func (\*Reader) Read
+``` go
+func (r *Reader) Read(p []byte) (int, error)
+```
+Read pulls data up from the underlying io.Reader and decompresses the data
+
+
+
+## type Writer
+``` go
+type Writer struct {
+    // contains filtered or unexported fields
+}
+```
+
+
+
+
+
+
+
+
+### func NewWriter
+``` go
+func NewWriter(w io.Writer) (*Writer, error)
+```
+NewWriter returns an io.WriteCloser. Writes to this writer are
 compressed and sent to the underlying writer.
-It is the callers responsibility to call Close on the WriteCloser.
+It is the caller's responsibility to call Close on the WriteCloser.
 Writes may not be flushed until Close.
 
 
 
-## type BzipError
+
+### func (\*Writer) Close
 ``` go
-type BzipError struct {
-    ReturnCode int
-    Message    string
-}
+func (b *Writer) Close() error
 ```
-BzipError represents an error returned during operation
-of bzlib. It contains a message about the attempted action
-as well as the bzlib return code.
+Close closes the writer, flushing any unwritten data to the underlying io.Writer
+Close does not close the underlying io.Writer.
 
 
 
-
-
-
-
-
-
-
-
-### func (BzipError) Error
+### func (\*Writer) Flush
 ``` go
-func (e BzipError) Error() string
+func (b *Writer) Flush() error
 ```
+Flush writes any pending data to the underlying writer.
+
+
+
+### func (\*Writer) Write
+``` go
+func (b *Writer) Write(d []byte) (int, error)
+```
+Write writes a compressed p to an underlying io.Writer. The bytes are not
+necessarily flushed until the writer is closed or Flush is called.
+
 
 
 
