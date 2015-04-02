@@ -8,15 +8,15 @@ package cbzip2
 */
 import "C"
 import (
-	"errors"
 	"io"
 	"unsafe"
 )
 
 type bzipReader struct {
-	r  io.Reader
-	bz *C.bz_stream
-	in []byte
+	r      io.Reader
+	bz     *C.bz_stream
+	in     []byte
+	skipIn bool
 }
 
 // NewBzipWriter returns an io.WriteCloser. Writes to this writer are
@@ -46,9 +46,10 @@ func (r *bzipReader) Read(p []byte) (int, error) {
 	r.bz.avail_out = (C.uint)(len(p))
 	r.bz.next_out = (*C.char)(unsafe.Pointer(&p[0]))
 	for {
-		// if the amount of available data to read is 0,
-		// get more data
-		if r.bz.avail_in == 0 {
+		// if the amount of available data to read is 0
+		// we reach to the wrapped reader to get more data
+		// otherwise, we compress what data is already available
+		if !r.skipIn && r.bz.avail_in == 0 {
 			var n int
 			n, err = r.r.Read(r.in)
 
@@ -60,6 +61,7 @@ func (r *bzipReader) Read(p []byte) (int, error) {
 
 			// we have data, and EOF
 			// disregard the error
+			// this will cause a superflous call to Read
 			if n > 0 && err == io.EOF {
 				err = nil
 			}
@@ -73,21 +75,26 @@ func (r *bzipReader) Read(p []byte) (int, error) {
 
 			r.bz.next_in = (*C.char)(unsafe.Pointer(&r.in[0]))
 			r.bz.avail_in = (C.uint)(n)
+		} else {
+			r.skipIn = false // try again
 		}
 		ret := C.BZ2_bzDecompress(r.bz)
 		switch ret {
 		case BZ_PARAM_ERROR:
-			return 0, errors.New("param error (this is not your fault?)")
+			return 0, BzipError{Message: "param error", ReturnCode: int(ret)}
 		case BZ_DATA_ERROR:
-			return 0, errors.New("data integrity error detected")
+			return 0, BzipError{Message: "data integrity error detected", ReturnCode: int(ret)}
 		case BZ_DATA_ERROR_MAGIC:
-			return 0, errors.New("compressed stream doesn't begin with the right magic bytes")
+			return 0, BzipError{Message: "compressed stream doesn't begin with the right magic bytes", ReturnCode: int(ret)}
 		case BZ_MEM_ERROR:
-			return 0, errors.New("insufficent memory available")
+			return 0, BzipError{Message: "insufficent memory available", ReturnCode: int(ret)}
 		}
-		// check if we've read anything
+		// check if we've read anything, if so, return it.
 		have := len(p) - int(r.bz.avail_out)
 		if have > 0 || err != nil {
+			// if the there is no output buffer and we returned OK
+			// we want to skip the next read
+			r.skipIn = (ret == BZ_OK && r.bz.avail_out == 0)
 			return have, err
 		}
 	}
