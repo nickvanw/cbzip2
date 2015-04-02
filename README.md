@@ -2,9 +2,10 @@
 # cbzip2
     import "github.com/nickvanw/cbzip2"
 
+[![Build Status](https://travis-ci.org/nickvanw/cbzip2.svg?branch=master)](https://travis-ci.org/nickvanw/cbzip2)
+
 package cbzip2 provides access to the "low level" bzip2 interface
 via bzlib.h, documented here: a href="http://www.bzip.org/1.0.3/html/low-level.html">http://www.bzip.org/1.0.3/html/low-level.html</a>
-
 
 
 
