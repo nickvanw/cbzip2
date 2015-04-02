@@ -57,6 +57,10 @@ type bzipWriter struct {
 	out []byte
 }
 
+// NewBzipWriter returns an io.WriteCloser. Writes to this writer are
+// compressed and sent to the underlying writer.
+// It is the callers responsibility to call Close on the WriteCloser.
+// Writes may not be flushed until Close.
 func NewBzipWriter(w io.Writer) (io.WriteCloser, error) {
 	wrtr := &bzipWriter{w: w, out: make([]byte, bufferLen)}
 
@@ -71,15 +75,20 @@ func NewBzipWriter(w io.Writer) (io.WriteCloser, error) {
 	return wrtr, nil
 }
 
+// Write writes a compressed p to an underlying io.Writer. The bytes are not
+// necessarily flushed until the writer is closed or Flush is called.
 func (b *bzipWriter) Write(d []byte) (int, error) {
 	return b.write(d, BZ_RUN)
 }
 
+// Flush writes any pending data to the underlying writer.
 func (b *bzipWriter) Flush() error {
 	_, err := b.write(nil, BZ_FLUSH)
 	return err
 }
 
+// Close closes the writer, flushing any unwritten data to the underlying io.Writer
+// Close does not close the underlying io.Writer.
 func (b *bzipWriter) Close() error {
 	if _, err := b.write(nil, BZ_FINISH); err != nil {
 		return err
@@ -97,7 +106,7 @@ func (b *bzipWriter) write(d []byte, flush int) (int, error) {
 		b.bz.next_in = (*C.char)(unsafe.Pointer(&d[0]))
 	}
 
-	// loop until we dont have a full output buffer
+	// loop until we don't have a full output buffer
 	// this will also write to the underlying writer
 	for {
 		// give the compressor our output buffer
