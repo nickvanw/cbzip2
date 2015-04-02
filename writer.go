@@ -30,6 +30,7 @@ const (
 
 // copied from bzlib.h
 const (
+	// valid actions
 	BZ_RUN    = 0
 	BZ_FLUSH  = 1
 	BZ_FINISH = 2

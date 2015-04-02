@@ -1,6 +1,6 @@
 
 # cbzip2
-    import "."
+    import "github.com/nickvanw/cbzip2"
 
 package cbzip2 provides access to the "low level" bzip2 interface
 via bzlib.h, documented here: a href="http://www.bzip.org/1.0.3/html/low-level.html">http://www.bzip.org/1.0.3/html/low-level.html</a>
@@ -11,6 +11,7 @@ via bzlib.h, documented here: a href="http://www.bzip.org/1.0.3/html/low-level.h
 ## Constants
 ``` go
 const (
+    // valid actions
     BZ_RUN    = 0
     BZ_FLUSH  = 1
     BZ_FINISH = 2
