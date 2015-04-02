@@ -16,6 +16,7 @@ type bzipWriter struct {
 	w   io.Writer
 	bz  *C.bz_stream
 	out []byte
+	err error
 }
 
 // NewWriter returns an io.WriteCloser. Writes to this writer are
@@ -30,7 +31,7 @@ func NewWriter(w io.Writer) (io.WriteCloser, error) {
 	wrtr.bz = &C.bz_stream{bzalloc: nil, bzfree: nil, opaque: nil}
 
 	if result := C.BZ2_bzCompressInit(wrtr.bz, blockSize, verbosity, workFactor); result != BZ_OK {
-		return nil, BzipError{Message: "unable to initialize", ReturnCode: int(result)}
+		return nil, ErrInit
 	}
 
 	return wrtr, nil
@@ -39,11 +40,17 @@ func NewWriter(w io.Writer) (io.WriteCloser, error) {
 // Write writes a compressed p to an underlying io.Writer. The bytes are not
 // necessarily flushed until the writer is closed or Flush is called.
 func (b *bzipWriter) Write(d []byte) (int, error) {
+	if b.err != nil {
+		return 0, b.err
+	}
 	return b.write(d, BZ_RUN)
 }
 
 // Flush writes any pending data to the underlying writer.
 func (b *bzipWriter) Flush() error {
+	if b.err != nil {
+		return b.err
+	}
 	_, err := b.write(nil, BZ_FLUSH)
 	return err
 }
@@ -51,11 +58,15 @@ func (b *bzipWriter) Flush() error {
 // Close closes the writer, flushing any unwritten data to the underlying io.Writer
 // Close does not close the underlying io.Writer.
 func (b *bzipWriter) Close() error {
+	if b.err != nil {
+		return b.err
+	}
 	if _, err := b.write(nil, BZ_FINISH); err != nil {
 		return err
 	}
 	C.BZ2_bzCompressEnd(b.bz)
-	return io.EOF
+	b.err = io.EOF
+	return nil
 }
 
 func (b *bzipWriter) write(d []byte, flush int) (int, error) {
@@ -75,14 +86,15 @@ func (b *bzipWriter) write(d []byte, flush int) (int, error) {
 		b.bz.avail_out = (C.uint)(len(b.out))
 		// add data with our specified call to the buffer
 		if ret := C.BZ2_bzCompress(b.bz, (C.int)(flush)); ret < 0 {
-			return 0, BzipError{Message: "unable to compress", ReturnCode: int(ret)}
+			b.err = ErrBadCompression
+			return 0, b.err
 		}
 		// we have (total length) - (space available) of data
 		have := len(b.out) - int(b.bz.avail_out)
-		_, err := b.w.Write(b.out[:have])
-		if err != nil {
+		_, b.err = b.w.Write(b.out[:have])
+		if b.err != nil {
 			C.BZ2_bzCompressEnd(b.bz)
-			return 0, err
+			return 0, b.err
 		}
 		// we have available output buffer, drop out
 		// and get more data
