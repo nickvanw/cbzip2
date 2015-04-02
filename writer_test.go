@@ -31,7 +31,7 @@ func TestBasicCompress(t *testing.T) {
 	for _, v := range tt {
 		t.Logf("test: %s", v.msg)
 		var b bytes.Buffer
-		wrtr, err := NewBzipWriter(&b)
+		wrtr, err := NewWriter(&b)
 		if err != nil {
 			t.Fatalf("error creating bzip writer: %s", err)
 		}
@@ -56,7 +56,7 @@ func TestRandomCompress(t *testing.T) {
 	}
 	// compress random data
 	var out bytes.Buffer
-	wrtr, err := NewBzipWriter(&out)
+	wrtr, err := NewWriter(&out)
 	if err != nil {
 		t.Fatalf("error creating bzip writer: %s", err)
 	}
