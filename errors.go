@@ -1,15 +1,12 @@
 package cbzip2
 
-import "fmt"
+import "errors"
 
-// BzipError represents an error returned during operation
-// of bzlib. It contains a message about the attempted action
-// as well as the bzlib return code.
-type BzipError struct {
-	ReturnCode int
-	Message    string
-}
-
-func (e BzipError) Error() string {
-	return fmt.Sprintf("%s: %d", e.Message, e.ReturnCode)
-}
+var (
+	ErrBadParam       = errors.New("bad param (should be impossible)")
+	ErrBadData        = errors.New("integrity problem detected in input data")
+	ErrBadMagic       = errors.New("compressed stream does not being with magic bytes")
+	ErrMem            = errors.New("insufficient memory available ಠ_ಠ")
+	ErrInit           = errors.New("unable to initialize bzlib.h")
+	ErrBadCompression = errors.New("unable to compress data")
+)
