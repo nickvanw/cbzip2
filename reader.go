@@ -4,7 +4,7 @@ package cbzip2
 #cgo LDFLAGS: -lbz2
 #cgo CFLAGS: -Werror=implicit
 
-#include <bzlib.h>
+#include "bzip2/bzlib.h"
 */
 import "C"
 import (
