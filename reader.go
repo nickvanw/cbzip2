@@ -29,7 +29,7 @@ func NewReader(r io.Reader) (*Reader, error) {
 	rdr.bz = &C.bz_stream{bzalloc: nil, bzfree: nil, opaque: nil}
 
 	if result := C.BZ2_bzDecompressInit(rdr.bz, verbosity, 0); result != BZ_OK {
-		return nil, ErrInit
+		return nil, retCodeToErr(int(result))
 	}
 
 	return rdr, nil
@@ -77,19 +77,8 @@ func (r *Reader) Read(p []byte) (int, error) {
 			r.skipIn = false // try again
 		}
 		ret := C.BZ2_bzDecompress(r.bz)
-		var err error
-		switch ret {
-		case BZ_PARAM_ERROR:
-			err = ErrBadParam
-		case BZ_DATA_ERROR:
-			err = ErrBadData
-		case BZ_DATA_ERROR_MAGIC:
-			err = ErrBadMagic
-		case BZ_MEM_ERROR:
-			err = ErrMem
-		}
-		if err != nil {
-			r.err = err
+		if ret < 0 {
+			r.err = retCodeToErr(int(ret))
 		}
 		// check if we've read anything, if so, return it.
 		have := len(p) - int(r.bz.avail_out)

@@ -32,7 +32,9 @@ func TestBasicCompress(t *testing.T) {
 		if err != nil {
 			t.Fatalf("error writing data: %s", err)
 		}
-		wrtr.Close()
+		if err := wrtr.Close(); err != nil {
+			t.Fatalf("failed to close bzip2 writer: %s", err)
+		}
 		if !reflect.DeepEqual(b.Bytes(), v.want) {
 			t.Logf("got: %#v", b.Bytes())
 			t.Logf("want: %#v", v.want)
@@ -60,7 +62,9 @@ func TestRandomCompress(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error compressing data: %s", err)
 	}
-	wrtr.Close()
+	if err := wrtr.Close(); err != nil {
+		t.Fatalf("failed to close bzip2 writer: %s", err)
+	}
 	// use the built in bzip2 to read the data back out
 	var decompress bytes.Buffer
 	bzipOut := bzip2.NewReader(&out)
