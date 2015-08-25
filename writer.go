@@ -1,19 +1,10 @@
 package cbzip2
 
-/*
-#cgo CFLAGS: -Werror=implicit
-
-#include "bzlib.h"
-*/
-import "C"
-import (
-	"io"
-	"unsafe"
-)
+import "io"
 
 type Writer struct {
 	w   io.Writer
-	bz  *C.bz_stream
+	bz  bzip
 	out []byte
 	err error
 }
@@ -25,12 +16,8 @@ type Writer struct {
 func NewWriter(w io.Writer) (*Writer, error) {
 	wrtr := &Writer{w: w, out: make([]byte, bufferLen)}
 
-	// We dont want to use a custom memory allocator, so we set
-	// bzalloc, bzfree and opaque to NULL, to use malloc / free
-	wrtr.bz = &C.bz_stream{bzalloc: nil, bzfree: nil, opaque: nil}
-
-	if result := C.BZ2_bzCompressInit(wrtr.bz, blockSize, verbosity, workFactor); result != BZ_OK {
-		return nil, retCodeToErr(int(result))
+	if err := wrtr.bz.compressInit(blockSize, verbosity, workFactor); err != nil {
+		return nil, err
 	}
 
 	return wrtr, nil
@@ -42,13 +29,7 @@ func (b *Writer) Write(d []byte) (int, error) {
 	if b.err != nil {
 		return 0, b.err
 	}
-	if len(d) == 0 {
-		b.bz.avail_in = 0
-		b.bz.next_in = (*C.char)(unsafe.Pointer(nil))
-	} else {
-		b.bz.avail_in = (C.uint)(len(d))
-		b.bz.next_in = (*C.char)(unsafe.Pointer(&d[0]))
-	}
+	b.bz.setInBuf(d, len(d))
 
 	// loop until there's no more input data
 	for {
@@ -58,7 +39,7 @@ func (b *Writer) Write(d []byte) (int, error) {
 			return 0, b.err
 		}
 		// if we've processed all of the input, break
-		if b.bz.avail_in == 0 {
+		if b.bz.availIn() == 0 {
 			break
 		}
 	}
@@ -102,27 +83,26 @@ func (b *Writer) Close() error {
 		}
 	}
 
-	C.BZ2_bzCompressEnd(b.bz)
+	_ = b.bz.endCompress()
 	b.err = io.EOF
 	return nil
 }
 
-func (b *Writer) compress(flush int) (int, error) {
+func (b *Writer) compress(flag int) (int, error) {
 	// give the compressor our output buffer
-	b.bz.next_out = (*C.char)(unsafe.Pointer(&b.out[0]))
-	b.bz.avail_out = (C.uint)(len(b.out))
+	b.bz.setOutBuf(b.out, len(b.out))
 
 	// add data with our specified call to the buffer
-	ret := C.BZ2_bzCompress(b.bz, (C.int)(flush))
-	if ret < 0 {
-		return 0, retCodeToErr(int(ret))
+	ret, err := b.bz.compress(flag)
+	if err != nil {
+		return 0, err
 	}
 
 	// we have (total length) - (space available) of data
-	have := len(b.out) - int(b.bz.avail_out)
-	_, err := b.w.Write(b.out[:have])
+	have := len(b.out) - b.bz.availOut()
+	_, err = b.w.Write(b.out[:have])
 	if err != nil {
-		C.BZ2_bzCompressEnd(b.bz)
+		_ = b.bz.endCompress()
 		return 0, err
 	}
 
