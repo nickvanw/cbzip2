@@ -1,19 +1,10 @@
 package cbzip2
 
-/*
-#cgo CFLAGS: -Werror=implicit
-
-#include "bzlib.h"
-*/
-import "C"
-import (
-	"io"
-	"unsafe"
-)
+import "io"
 
 type Reader struct {
 	r      io.Reader
-	bz     *C.bz_stream
+	bz     bzip
 	in     []byte
 	skipIn bool
 	err    error
@@ -24,14 +15,9 @@ type Reader struct {
 func NewReader(r io.Reader) (*Reader, error) {
 	rdr := &Reader{r: r, in: make([]byte, bufferLen)}
 
-	// We dont want to use a custom memory allocator, so we set
-	// bzalloc, bzfree and opaque to NULL, to use malloc / free
-	rdr.bz = &C.bz_stream{bzalloc: nil, bzfree: nil, opaque: nil}
-
-	if result := C.BZ2_bzDecompressInit(rdr.bz, verbosity, 0); result != BZ_OK {
-		return nil, retCodeToErr(int(result))
+	if err := rdr.bz.decompressInit(verbosity, 0); err != nil {
+		return nil, err
 	}
-
 	return rdr, nil
 }
 
@@ -41,19 +27,18 @@ func (r *Reader) Read(p []byte) (int, error) {
 		return 0, nil
 	}
 	// read and deflate until the output buffer is full
-	r.bz.avail_out = (C.uint)(len(p))
-	r.bz.next_out = (*C.char)(unsafe.Pointer(&p[0]))
+	r.bz.setOutBuf(p, len(p))
 	for {
 		// if the amount of available data to read is 0
 		// we reach to the wrapped reader to get more data
 		// otherwise, we compress what data is already available
-		if !r.skipIn && r.bz.avail_in == 0 {
+		if !r.skipIn && r.bz.availIn() == 0 {
 			var n int
 			n, r.err = r.r.Read(r.in)
 
 			// we are done with reading
 			if n == 0 && r.err == io.EOF {
-				C.BZ2_bzDecompressEnd(r.bz)
+				_ = r.bz.endDecompress()
 				return n, r.err
 			}
 
@@ -65,27 +50,25 @@ func (r *Reader) Read(p []byte) (int, error) {
 			}
 			if n == 0 && r.err != nil {
 				// if we don't have any data and we errored, close and return
-				C.BZ2_bzDecompressEnd(r.bz)
+				_ = r.bz.endDecompress()
 				return 0, r.err
 			}
 			// if we do have an error, but we read data, we want to process it
 			// and return the error at the bottom
-
-			r.bz.next_in = (*C.char)(unsafe.Pointer(&r.in[0]))
-			r.bz.avail_in = (C.uint)(n)
+			r.bz.setInBuf(r.in, n)
 		} else {
 			r.skipIn = false // try again
 		}
-		ret := C.BZ2_bzDecompress(r.bz)
+		ret := r.bz.decompress()
 		if ret < 0 {
 			r.err = retCodeToErr(int(ret))
 		}
 		// check if we've read anything, if so, return it.
-		have := len(p) - int(r.bz.avail_out)
+		have := len(p) - int(r.bz.availOut())
 		if have > 0 || r.err != nil {
 			// if the there is no output buffer and we returned OK
 			// we want to skip the next read
-			r.skipIn = (ret == BZ_OK && r.bz.avail_out == 0)
+			r.skipIn = (ret == BZ_OK && r.bz.availOut() == 0)
 			return have, r.err
 		}
 	}
@@ -96,7 +79,7 @@ func (r *Reader) Close() error {
 	if r.err != nil {
 		return r.err
 	}
-	C.BZ2_bzDecompressEnd(r.bz)
+	_ = r.bz.endDecompress()
 	r.err = io.EOF
 	return nil
 }
